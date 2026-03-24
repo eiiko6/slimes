@@ -1,12 +1,22 @@
+use std::{
+    collections::HashMap,
+    io::{self, Write},
+};
+
+use chrono::Utc;
 use clap::Parser;
 use colored::Colorize;
+use mac_address::get_mac_address;
+use serde::Serialize;
 use sysinfo::System;
 
 use slimes::{
     application_header,
     benchmark::{BenchmarkResults, run_benchmark_multithread, run_benchmark_singlethread},
     slimes::get_all_slimes,
+    vprintln,
 };
+use uuid::Uuid;
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
@@ -28,13 +38,56 @@ pub struct Cli {
     #[arg(short, long)]
     pub jobs: Option<usize>,
 
+    /// Don't send data to leaderboard server
+    #[arg(short, long)]
+    pub offline: bool,
+
+    /// Leaderboard server URL to send report to
+    #[arg(long, default_value = "https://alatreon.org/slimes")]
+    pub server_url: String,
+
     /// Enable verbose output logging
     #[arg(short, long)]
     pub verbose: bool,
 }
 
+#[derive(Serialize)]
+struct FullReport {
+    mac_address: String,
+    timestamp: String,
+    slimes: Option<HashMap<String, Vec<String>>>,
+    benchmark: Option<BenchmarkReport>,
+}
+
+#[derive(Serialize)]
+struct BenchmarkReport {
+    prime_limit: u64,
+    logical_cores: usize,
+    single_thread: BenchmarkResults,
+    multi_thread: BenchmarkResults,
+}
+
 fn main() {
     let cli = Cli::parse();
+    let mut report = FullReport {
+        mac_address: get_mac_address()
+            .ok()
+            .flatten()
+            .map(|m| m.to_string())
+            .unwrap_or_else(|| format!("unknown-mac#{}", Uuid::new_v4())),
+        timestamp: Utc::now().to_rfc3339(),
+        slimes: None,
+        benchmark: None,
+    };
+
+    vprintln!(
+        cli.verbose,
+        "Initialized report {} {}",
+        report.mac_address,
+        report.timestamp
+    );
+
+    let mut report_slimes = HashMap::new();
 
     println!("{}", application_header().bright_blue());
 
@@ -45,9 +98,15 @@ fn main() {
         sys.refresh_all();
 
         for slime in slimes {
-            slime.print(&sys, cli.verbose);
+            let label = slime.label().to_string();
+            let values = slime.values(&sys, cli.verbose);
+
+            slime.print_from_values(&values);
+            report_slimes.insert(label, values);
         }
         println!();
+
+        report.slimes = Some(report_slimes);
     }
 
     if !cli.skip_benchmark {
@@ -81,6 +140,56 @@ fn main() {
             "Parallel Scaling  : {}",
             scaling_color_formatter(format!("{:.2}x", multi_thread_speedup_ratio)).bold()
         );
+
+        report.benchmark = Some(BenchmarkReport {
+            prime_limit: cli.prime_limit,
+            logical_cores: logical_core_count,
+            single_thread: singlethread_benchmark,
+            multi_thread: multithread_benchmark,
+        });
+    }
+
+    if !cli.offline {
+        let json_payload = serde_json::to_string_pretty(&report).unwrap();
+        vprintln!(cli.verbose, "Generated JSON report: {:?}", &json_payload);
+
+        println!();
+        if !confirm_upload() {
+            return;
+        }
+
+        send_to_server(&cli.server_url, &report);
+    }
+}
+
+fn confirm_upload() -> bool {
+    print!("Send data to leaderboard server? [Y/n] ");
+    io::stdout().flush().unwrap();
+
+    let mut input = String::new();
+    io::stdin()
+        .read_line(&mut input)
+        .expect("Failed to read line");
+    let input = input.trim().to_lowercase();
+
+    input.is_empty() || input.starts_with('y')
+}
+
+fn send_to_server(url: &str, report: &FullReport) {
+    let client = reqwest::blocking::Client::new();
+    match client.post(url).json(&report).send() {
+        Ok(resp) => {
+            if resp.status().is_success() {
+                println!("{}", "Successfully uploaded results!".green().bold());
+            } else {
+                eprintln!(
+                    "{} Error sending to server: {}",
+                    "Error:".red(),
+                    resp.status()
+                );
+            }
+        }
+        Err(e) => eprintln!("{} Failed to connect: {}", "Error:".red(), e),
     }
 }
 

@@ -1,4 +1,5 @@
 use colored::Colorize;
+use serde::Serialize;
 use std::{
     sync::{
         Arc, Mutex,
@@ -13,6 +14,7 @@ use crate::vprintln;
 // Factor determining how many times the calculation runs in the multi-threaded test.
 pub const MULTI_THREAD_LOAD_FACTOR: usize = 32;
 
+#[derive(Serialize)]
 pub struct BenchmarkResults {
     pub duration: Duration,
     pub primes_found: u64,

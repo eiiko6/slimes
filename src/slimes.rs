@@ -24,6 +24,21 @@ pub trait Slime {
             println!("{}", val.white());
         }
     }
+
+    fn print_from_values(&self, values: &Vec<String>) {
+        for (i, val) in values.iter().enumerate() {
+            if i == 0 {
+                print!(
+                    "{} {:<10} ",
+                    self.icon().color(self.color()),
+                    format!("{}:", self.label()).bold().color(self.color())
+                );
+            } else {
+                print!("  {:<10} ", " ");
+            }
+            println!("{}", val.white());
+        }
+    }
 }
 
 pub fn get_all_slimes() -> Vec<Box<dyn Slime>> {
