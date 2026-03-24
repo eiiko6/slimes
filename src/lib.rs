@@ -1,7 +1,7 @@
 // use colored::Colorize;
 
-mod benchmark;
-mod slimes;
+pub mod benchmark;
+pub mod slimes;
 
 pub fn application_header() -> &'static str {
     let ascii_art = r#"

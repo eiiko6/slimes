@@ -92,15 +92,15 @@ pub fn run_benchmark_multithread(prime_limit: u64, jobs: usize) -> BenchmarkResu
     let final_count = *shared_total_prime_count.lock().unwrap();
 
     // Calculate average time a thread spent working
-    let durations_guard = shared_thread_durations.lock().unwrap();
-    let total_thread_microseconds: u128 = durations_guard.iter().map(|d| d.as_micros()).sum();
+    // let durations_guard = shared_thread_durations.lock().unwrap();
+    // let total_thread_microseconds: u128 = durations_guard.iter().map(|d| d.as_micros()).sum();
 
-    let average_thread_microseconds = if !durations_guard.is_empty() {
-        total_thread_microseconds / durations_guard.len() as u128
-    } else {
-        0
-    };
-    let average_thread_duration = Duration::from_micros(average_thread_microseconds as u64);
+    // let average_thread_microseconds = if !durations_guard.is_empty() {
+    //     total_thread_microseconds / durations_guard.len() as u128
+    // } else {
+    //     0
+    // };
+    // let average_thread_duration = Duration::from_micros(average_thread_microseconds as u64);
 
     // Score normalized by load factor to represent "Speed per unit of work"
     let score = calculate_score(duration, MULTI_THREAD_LOAD_FACTOR as u64, prime_limit);

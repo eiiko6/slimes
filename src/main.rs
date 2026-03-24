@@ -1,9 +1,12 @@
 use clap::Parser;
 use colored::Colorize;
-use slimefetch::application_header;
+use sysinfo::System;
 
-mod benchmark;
-use crate::benchmark::{BenchmarkResults, run_benchmark_multithread, run_benchmark_singlethread};
+use slimes::{
+    application_header,
+    benchmark::{BenchmarkResults, run_benchmark_multithread, run_benchmark_singlethread},
+    slimes::get_all_slimes,
+};
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
@@ -31,35 +34,47 @@ fn main() {
 
     println!("{}", application_header().bright_blue());
 
-    let logical_core_count = match cli.jobs {
-        Some(j) => j,
-        None => num_cpus::get(),
-    };
+    let slimes = get_all_slimes();
 
-    print_section_header("Single Threaded CPU Benchmark");
-    let singlethread_benchmark = run_benchmark_singlethread(cli.prime_limit);
-    print_detailed_result(&singlethread_benchmark);
-    print_section_header("Multi Threaded CPU Benchmark");
-    let multithread_benchmark = run_benchmark_multithread(cli.prime_limit, logical_core_count);
-    print_detailed_result(&multithread_benchmark);
+    let mut sys = System::new_all();
+    sys.refresh_all();
 
-    let multi_thread_speedup_ratio = if singlethread_benchmark.score > 0 {
-        multithread_benchmark.score / singlethread_benchmark.score
-    } else {
-        0
-    };
+    for slime in slimes {
+        slime.print(&sys);
+    }
+    println!();
 
-    let scaling_color_formatter =
-        if multi_thread_speedup_ratio as f64 > (logical_core_count as f64 * 0.7) {
-            |s: String| s.green()
-        } else {
-            |s: String| s.yellow()
+    if !cli.skip_benchmark {
+        let logical_core_count = match cli.jobs {
+            Some(j) => j,
+            None => num_cpus::get(),
         };
 
-    println!(
-        "Parallel Scaling  : {}",
-        scaling_color_formatter(format!("{:.2}x", multi_thread_speedup_ratio)).bold()
-    );
+        print_section_header("Single Threaded CPU Benchmark");
+        let singlethread_benchmark = run_benchmark_singlethread(cli.prime_limit);
+        print_detailed_result(&singlethread_benchmark);
+        print_section_header("Multi Threaded CPU Benchmark");
+        let multithread_benchmark = run_benchmark_multithread(cli.prime_limit, logical_core_count);
+        print_detailed_result(&multithread_benchmark);
+
+        let multi_thread_speedup_ratio = if singlethread_benchmark.score > 0 {
+            multithread_benchmark.score / singlethread_benchmark.score
+        } else {
+            0
+        };
+
+        let scaling_color_formatter =
+            if multi_thread_speedup_ratio as f64 > (logical_core_count as f64 * 0.7) {
+                |s: String| s.green()
+            } else {
+                |s: String| s.yellow()
+            };
+
+        println!(
+            "Parallel Scaling  : {}",
+            scaling_color_formatter(format!("{:.2}x", multi_thread_speedup_ratio)).bold()
+        );
+    }
 }
 
 pub fn print_section_header(title_text: &str) {
