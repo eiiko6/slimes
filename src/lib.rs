@@ -4,7 +4,7 @@ pub mod benchmark;
 pub mod slimes;
 
 pub fn application_header() -> &'static str {
-    let ascii_art = r#"
+    r#"
       .---.
     .'     '.     < CPU SLIME >
    /   ^ ^   \
@@ -12,7 +12,7 @@ pub fn application_header() -> &'static str {
   |           |
    \         /
     '._____.'
-    "#;
-    // println!("{}", ascii_art.bright_green().bold());
-    ascii_art
+    "#
+    // .bright_green()
+    // .bold()
 }

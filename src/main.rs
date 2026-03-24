@@ -15,6 +15,10 @@ pub struct Cli {
     #[arg(short, long)]
     pub skip_benchmark: bool,
 
+    /// Skil system info
+    #[arg(short = 'S', long)]
+    pub skip_system_info: bool,
+
     /// Benchmark: Upper limit for prime calculation (higher number = longer test)
     #[arg(short, long, default_value_t = 500_000)]
     pub prime_limit: u64,
@@ -34,15 +38,17 @@ fn main() {
 
     println!("{}", application_header().bright_blue());
 
-    let slimes = get_all_slimes();
+    if !cli.skip_system_info {
+        let slimes = get_all_slimes();
 
-    let mut sys = System::new_all();
-    sys.refresh_all();
+        let mut sys = System::new_all();
+        sys.refresh_all();
 
-    for slime in slimes {
-        slime.print(&sys);
+        for slime in slimes {
+            slime.print(&sys);
+        }
+        println!();
     }
-    println!();
 
     if !cli.skip_benchmark {
         let logical_core_count = match cli.jobs {

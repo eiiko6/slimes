@@ -17,7 +17,7 @@ pub trait Slime {
                     format!("{}:", self.label()).bold().color(self.color())
                 );
             } else {
-                print!("{} {:<10} ", " ", " ");
+                print!("  {:<10} ", " ");
             }
             println!("{}", val.white());
         }

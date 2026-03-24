@@ -125,7 +125,7 @@ pub fn calculate_primes(range_start: u64, range_end: u64) -> u64 {
         current_number = 3;
     }
 
-    if current_number % 2 == 0 {
+    if current_number.is_multiple_of(2) {
         current_number += 1;
     }
 
@@ -147,7 +147,7 @@ pub fn is_number_prime(number: u64) -> bool {
     let search_limit = (number as f64).sqrt() as u64;
 
     for i in (3..=search_limit).step_by(2) {
-        if number % i == 0 {
+        if number.is_multiple_of(i) {
             return false;
         }
     }
