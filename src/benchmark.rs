@@ -1,3 +1,4 @@
+use colored::Colorize;
 use std::{
     sync::{
         Arc, Mutex,
@@ -6,6 +7,8 @@ use std::{
     thread,
     time::{Duration, Instant},
 };
+
+use crate::vprintln;
 
 // Factor determining how many times the calculation runs in the multi-threaded test.
 pub const MULTI_THREAD_LOAD_FACTOR: usize = 32;
@@ -17,7 +20,9 @@ pub struct BenchmarkResults {
     pub batch_count: u64,
 }
 
-pub fn run_benchmark_singlethread(prime_limit: u64) -> BenchmarkResults {
+pub fn run_benchmark_singlethread(prime_limit: u64, verbose: bool) -> BenchmarkResults {
+    vprintln!(verbose, "Running single-threaded CPU benchmark");
+
     let start_time = Instant::now();
     let primes_found = calculate_primes(1, prime_limit);
     let duration = start_time.elapsed();
@@ -32,7 +37,9 @@ pub fn run_benchmark_singlethread(prime_limit: u64) -> BenchmarkResults {
     }
 }
 
-pub fn run_benchmark_multithread(prime_limit: u64, jobs: usize) -> BenchmarkResults {
+pub fn run_benchmark_multithread(prime_limit: u64, jobs: usize, verbose: bool) -> BenchmarkResults {
+    vprintln!(verbose, "Running multi-threaded CPU benchmark");
+
     let start_time = Instant::now();
 
     // The total number of calculation batches to perform across all threads

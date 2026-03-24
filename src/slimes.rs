@@ -2,14 +2,16 @@ use colored::Color;
 use colored::Colorize;
 use sysinfo::System;
 
+use crate::vprintln;
+
 pub trait Slime {
     fn label(&self) -> &str;
-    fn values(&self, sys: &System) -> Vec<String>;
+    fn values(&self, sys: &System, verbose: bool) -> Vec<String>;
     fn icon(&self) -> &str;
     fn color(&self) -> Color;
 
-    fn print(&self, sys: &System) {
-        for (i, val) in self.values(sys).iter().enumerate() {
+    fn print(&self, sys: &System, verbose: bool) {
+        for (i, val) in self.values(sys, verbose).iter().enumerate() {
             if i == 0 {
                 print!(
                     "{} {:<10} ",
@@ -45,7 +47,7 @@ impl Slime for OsSlime {
     fn label(&self) -> &str {
         "OS"
     }
-    fn values(&self, _sys: &System) -> Vec<String> {
+    fn values(&self, _sys: &System, _verbose: bool) -> Vec<String> {
         vec![format!(
             "{}",
             System::long_os_version().unwrap_or_else(|| "Unknown".into()),
@@ -65,7 +67,7 @@ impl Slime for KernelSlime {
     fn label(&self) -> &str {
         "Kernel"
     }
-    fn values(&self, _sys: &System) -> Vec<String> {
+    fn values(&self, _sys: &System, _verbose: bool) -> Vec<String> {
         vec![System::kernel_version().unwrap_or_else(|| "Unknown".into())]
     }
     fn icon(&self) -> &str {
@@ -82,7 +84,7 @@ impl Slime for HostnameSlime {
     fn label(&self) -> &str {
         "Hostname"
     }
-    fn values(&self, _sys: &System) -> Vec<String> {
+    fn values(&self, _sys: &System, _verbose: bool) -> Vec<String> {
         vec![System::host_name().unwrap_or_else(|| "Unknown".into())]
     }
     fn icon(&self) -> &str {
@@ -99,11 +101,13 @@ impl Slime for CpuSlime {
     fn label(&self) -> &str {
         "CPU"
     }
-    fn values(&self, sys: &System) -> Vec<String> {
+    fn values(&self, sys: &System, verbose: bool) -> Vec<String> {
         // sys.cpus()
         //     .iter()
         //     .map(|cpu| format!("{} @ {:.2}GHz", cpu.name(), cpu.frequency() as f32 / 1000.0))
         //     .collect()
+
+        vprintln!(verbose, "Querying and mapping CPU info");
 
         let cpus = sys.cpus();
 
@@ -134,7 +138,7 @@ impl Slime for RamSlime {
     fn label(&self) -> &str {
         "RAM"
     }
-    fn values(&self, sys: &System) -> Vec<String> {
+    fn values(&self, sys: &System, _verbose: bool) -> Vec<String> {
         let total_ram = sys.total_memory() / 1024 / 1024;
         let used_ram = sys.used_memory() / 1024 / 1024;
         vec![format!(
@@ -163,7 +167,7 @@ impl Slime for BoardSlime {
     fn color(&self) -> Color {
         Color::Green
     }
-    fn values(&self, _sys: &System) -> Vec<String> {
+    fn values(&self, _sys: &System, _verbose: bool) -> Vec<String> {
         let Some(mobo) = sysinfo::Motherboard::new() else {
             return vec!["Unknown Model".into()];
         };
@@ -201,11 +205,18 @@ impl Slime for GpuSlime {
     fn color(&self) -> Color {
         Color::Cyan
     }
-    fn values(&self, _sys: &System) -> Vec<String> {
+    fn values(&self, _sys: &System, verbose: bool) -> Vec<String> {
         let mut gpus = Vec::new();
 
         #[cfg(target_os = "windows")]
         {
+            use std::process::Command;
+
+            vprintln!(
+                verbose,
+                r#"Executing `wmic path win32_VideoController get name`"#
+            );
+
             if let Ok(output) = Command::new("wmic")
                 .args(["path", "win32_VideoController", "get", "name"])
                 .output()
@@ -223,6 +234,11 @@ impl Slime for GpuSlime {
         #[cfg(target_os = "linux")]
         {
             use std::process::Command;
+
+            vprintln!(
+                verbose,
+                r#"Executing `sh -c "lspci | grep -E 'VGA|3D'"` and formatting"#
+            );
 
             if let Ok(output) = Command::new("sh")
                 .arg("-c")
@@ -262,7 +278,9 @@ impl Slime for MonitorSlime {
     fn color(&self) -> Color {
         Color::Blue
     }
-    fn values(&self, _sys: &System) -> Vec<String> {
+    fn values(&self, _sys: &System, _verbose: bool) -> Vec<String> {
+        // vprintln!(verbose, "Querying and mapping monitors");
+
         match display_info::DisplayInfo::all() {
             Ok(displays) => displays
                 .iter()
@@ -298,12 +316,17 @@ impl Slime for NetworkSlime {
     fn color(&self) -> Color {
         Color::Cyan
     }
-    fn values(&self, _sys: &System) -> Vec<String> {
+    fn values(&self, _sys: &System, verbose: bool) -> Vec<String> {
         let mut nets = Vec::new();
 
         #[cfg(target_os = "windows")]
         {
             use std::process::Command;
+
+            vprintln!(
+                verbose,
+                r#"Executing `wmic path win32_networkadapter where PhysicalAdapter=True get name`"#
+            );
 
             if let Ok(output) = Command::new("wmic")
                 .args([
@@ -329,6 +352,11 @@ impl Slime for NetworkSlime {
         #[cfg(target_os = "linux")]
         {
             use std::process::Command;
+
+            vprintln!(
+                verbose,
+                r#"Executing `sh -c "lspci | grep -E 'Network|Ethernet'"` and formatting"#
+            );
 
             if let Ok(output) = Command::new("sh")
                 .arg("-c")
@@ -364,12 +392,17 @@ impl Slime for AudioSlime {
     fn color(&self) -> Color {
         Color::Red
     }
-    fn values(&self, _sys: &System) -> Vec<String> {
+    fn values(&self, _sys: &System, verbose: bool) -> Vec<String> {
         let mut audio_cards = Vec::new();
 
         #[cfg(target_os = "windows")]
         {
             use std::process::Command;
+
+            vprintln!(
+                verbose,
+                r#"Executing `wmic path win32_sounddevice get name`"#
+            );
 
             if let Ok(output) = Command::new("wmic")
                 .args(["path", "win32_sounddevice", "get", "name"])
@@ -388,6 +421,11 @@ impl Slime for AudioSlime {
         #[cfg(target_os = "linux")]
         {
             use std::process::Command;
+
+            vprintln!(
+                verbose,
+                r#"Executing `sh -c "lspci | grep -E 'Audio'"` and formatting"#
+            );
 
             if let Ok(output) = Command::new("sh")
                 .arg("-c")

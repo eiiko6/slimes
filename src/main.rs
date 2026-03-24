@@ -45,7 +45,7 @@ fn main() {
         sys.refresh_all();
 
         for slime in slimes {
-            slime.print(&sys);
+            slime.print(&sys, cli.verbose);
         }
         println!();
     }
@@ -57,10 +57,11 @@ fn main() {
         };
 
         print_section_header("Single Threaded CPU Benchmark");
-        let singlethread_benchmark = run_benchmark_singlethread(cli.prime_limit);
+        let singlethread_benchmark = run_benchmark_singlethread(cli.prime_limit, cli.verbose);
         print_detailed_result(&singlethread_benchmark);
         print_section_header("Multi Threaded CPU Benchmark");
-        let multithread_benchmark = run_benchmark_multithread(cli.prime_limit, logical_core_count);
+        let multithread_benchmark =
+            run_benchmark_multithread(cli.prime_limit, logical_core_count, cli.verbose);
         print_detailed_result(&multithread_benchmark);
 
         let multi_thread_speedup_ratio = if singlethread_benchmark.score > 0 {
