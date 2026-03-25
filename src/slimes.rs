@@ -42,7 +42,7 @@ pub trait Slime {
 }
 
 pub fn get_all_slimes() -> Vec<Box<dyn Slime>> {
-    vec![
+    let mut slimes: Vec<Box<dyn Slime>> = vec![
         Box::new(OsSlime),
         Box::new(KernelSlime),
         Box::new(HostnameSlime),
@@ -50,10 +50,16 @@ pub fn get_all_slimes() -> Vec<Box<dyn Slime>> {
         Box::new(CpuSlime),
         Box::new(GpuSlime),
         Box::new(RamSlime),
-        Box::new(MonitorSlime),
         Box::new(NetworkSlime),
-        Box::new(AudioSlime),
-    ]
+    ];
+
+    #[cfg(feature = "monitors")]
+    slimes.push(Box::new(MonitorSlime));
+
+    #[cfg(feature = "audio")]
+    slimes.push(Box::new(AudioSlime));
+
+    slimes
 }
 
 /// OS name
@@ -282,7 +288,9 @@ impl Slime for GpuSlime {
 }
 
 /// Monitors
+#[cfg(feature = "monitors")]
 pub struct MonitorSlime;
+#[cfg(feature = "monitors")]
 impl Slime for MonitorSlime {
     fn label(&self) -> &str {
         "Monitors"
@@ -396,7 +404,9 @@ impl Slime for NetworkSlime {
 }
 
 /// Audio hardware
+#[cfg(feature = "audio")]
 pub struct AudioSlime;
+#[cfg(feature = "audio")]
 impl Slime for AudioSlime {
     fn label(&self) -> &str {
         "Audio"
