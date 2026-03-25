@@ -3,6 +3,8 @@
 pub mod benchmark;
 pub mod slimes;
 
+pub const DEFAULT_PRIME_LIMIT: u64 = 500_000;
+
 #[macro_export]
 macro_rules! vprintln {
     ($verbose:expr, $($arg:tt)*) => {

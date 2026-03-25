@@ -4,14 +4,14 @@ use std::{
 };
 
 use chrono::Utc;
-use clap::Parser;
+use clap::{Parser, crate_version};
 use colored::Colorize;
 use mac_address::get_mac_address;
 use serde::Serialize;
 use sysinfo::System;
 
 use slimes::{
-    application_header,
+    DEFAULT_PRIME_LIMIT, application_header,
     benchmark::{BenchmarkResults, run_benchmark_multithread, run_benchmark_singlethread},
     slimes::get_all_slimes,
     vprintln,
@@ -30,7 +30,7 @@ pub struct Cli {
     pub skip_system_info: bool,
 
     /// Benchmark: Upper limit for prime calculation (higher number = longer test)
-    #[arg(short, long, default_value_t = 500_000)]
+    #[arg(short, long, default_value_t = DEFAULT_PRIME_LIMIT)]
     pub prime_limit: u64,
 
     /// Benchmark: Enforce cpu thread amount to use.
@@ -57,6 +57,7 @@ struct FullReport {
     timestamp: String,
     slimes: Option<HashMap<String, Vec<String>>>,
     benchmark: Option<BenchmarkReport>,
+    client_version: String,
 }
 
 #[derive(Serialize)]
@@ -78,6 +79,7 @@ fn main() {
         timestamp: Utc::now().to_rfc3339(),
         slimes: None,
         benchmark: None,
+        client_version: crate_version!().to_string(),
     };
 
     vprintln!(

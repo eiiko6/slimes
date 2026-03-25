@@ -1,11 +1,11 @@
 [package]
 name = "slimes"
-version = "0.1.0"
+version = "1.0.0"
 edition = "2024"
 
 [dependencies]
 chrono = { version = "0.4.44", features = ["serde"] }
-clap = { version = "4.6.0", features = ["derive"] }
+clap = { version = "4.6.0", features = ["cargo", "derive"] }
 colored = "3.1.1"
 cpal = { version = "0.17.3", optional = true }
 display-info = { version = "0.5.9", optional = true }
