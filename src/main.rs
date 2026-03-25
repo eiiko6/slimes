@@ -58,6 +58,7 @@ struct FullReport {
     slimes: Option<HashMap<String, Vec<String>>>,
     benchmark: Option<BenchmarkReport>,
     client_version: String,
+    signature: String,
 }
 
 #[derive(Serialize)]
@@ -69,6 +70,9 @@ struct BenchmarkReport {
 }
 
 fn main() {
+    #[cfg(windows)]
+    let _ = enable_ansi_support::enable_ansi_support();
+
     let cli = Cli::parse();
     let mut report = FullReport {
         mac_address: get_mac_address()
@@ -80,6 +84,7 @@ fn main() {
         slimes: None,
         benchmark: None,
         client_version: crate_version!().to_string(),
+        signature: String::new(),
     };
 
     vprintln!(
@@ -152,16 +157,31 @@ fn main() {
     }
 
     if !cli.offline {
-        let json_payload = serde_json::to_string_pretty(&report).unwrap();
-        vprintln!(cli.verbose, "Generated JSON report: {:?}", &json_payload);
-
         println!();
         if !confirm_upload() {
             return;
         }
 
+        report.signature = sign_upload();
+
+        let json_payload = serde_json::to_string_pretty(&report).unwrap();
+        vprintln!(cli.verbose, "Generated JSON report: {:?}", &json_payload);
+
         send_to_server(&cli.server_url, &report);
     }
+}
+
+fn sign_upload() -> String {
+    print!("Please sign your report, it should allow to identify it (or leave empty): ");
+    io::stdout().flush().unwrap();
+
+    let mut input = String::new();
+    io::stdin()
+        .read_line(&mut input)
+        .expect("Failed to read line");
+    let input = input.trim().to_string();
+
+    input
 }
 
 fn confirm_upload() -> bool {

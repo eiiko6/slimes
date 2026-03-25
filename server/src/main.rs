@@ -46,6 +46,8 @@ pub struct FullReport {
     pub timestamp: String,
     pub slimes: Option<HashMap<String, Vec<String>>>,
     pub benchmark: Option<BenchmarkReport>,
+    pub client_version: String,
+    pub signature: String,
 }
 
 #[derive(Deserialize)]
@@ -70,14 +72,19 @@ async fn submit(
     let raw_json = serde_json::to_string(&payload)
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    sqlx::query("INSERT INTO reports (mac_address, score, timestamp, data) VALUES (?, ?, ?, ?)")
-        .bind(payload.mac_address)
-        .bind(score as i64)
-        .bind(payload.timestamp)
-        .bind(raw_json)
-        .execute(&state.db)
-        .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    sqlx::query(
+        "INSERT INTO reports (mac_address, score, timestamp, client_version, signature, data) 
+         VALUES (?, ?, ?, ?, ?, ?)",
+    )
+    .bind(&payload.mac_address)
+    .bind(score as i64)
+    .bind(&payload.timestamp)
+    .bind(&payload.client_version)
+    .bind(&payload.signature)
+    .bind(raw_json)
+    .execute(&state.db)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     Ok(StatusCode::CREATED)
 }
@@ -142,6 +149,8 @@ async fn main() -> anyhow::Result<()> {
             mac_address TEXT NOT NULL,
             score INTEGER NOT NULL,
             timestamp TEXT NOT NULL,
+            client_version TEXT NOT NULL,
+            signature TEXT,
             data TEXT NOT NULL
         );",
     )

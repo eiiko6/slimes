@@ -9,6 +9,7 @@ clap = { version = "4.6.0", features = ["cargo", "derive"] }
 colored = "3.1.1"
 cpal = { version = "0.17.3", optional = true }
 display-info = { version = "0.5.9", optional = true }
+enable-ansi-support = "0.3.1"
 mac_address = "1.1.8"
 num_cpus = "1.17.0"
 reqwest = { version = "0.13.2", features = ["blocking", "json"] }
