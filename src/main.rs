@@ -43,7 +43,7 @@ pub struct Cli {
     pub offline: bool,
 
     /// Leaderboard server URL to send report to
-    #[arg(long, default_value = "https://alatreon.org/slimes")]
+    #[arg(long, default_value = "https://alatreon.org/slimes/")]
     pub server_url: String,
 
     /// Enable verbose output logging
