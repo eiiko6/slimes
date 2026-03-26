@@ -131,9 +131,9 @@ fn main() {
         print_detailed_result(&multithread_benchmark);
 
         let multi_thread_speedup_ratio = if singlethread_benchmark.score > 0 {
-            multithread_benchmark.score / singlethread_benchmark.score
+            multithread_benchmark.score as f32 / singlethread_benchmark.score as f32
         } else {
-            0
+            0.0
         };
 
         let scaling_color_formatter =
