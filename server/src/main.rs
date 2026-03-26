@@ -2,9 +2,9 @@ use std::{collections::HashMap, net::SocketAddr, sync::Arc, time::Duration};
 
 use axum::{
     Json, Router,
-    extract::{Query, State},
+    extract::{Path, Query, State},
     http::{Method, StatusCode, header},
-    routing::post,
+    routing::{get, post},
 };
 use clap::Parser;
 use serde::{Deserialize, Serialize};
@@ -42,6 +42,8 @@ pub struct BenchmarkReport {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct FullReport {
+    #[serde(skip_deserializing)]
+    pub id: Option<i64>,
     pub mac_address: String,
     pub timestamp: String,
     pub slimes: Option<HashMap<String, Vec<String>>>,
@@ -63,16 +65,17 @@ pub struct AppState {
 async fn submit(
     State(state): State<Arc<AppState>>,
     Json(payload): Json<FullReport>,
-) -> Result<StatusCode, (StatusCode, String)> {
+) -> Result<(StatusCode, Json<i64>), (StatusCode, String)> {
     let score = payload
         .benchmark
         .as_ref()
         .map(|b| b.multi_thread.score)
         .unwrap_or(0);
+
     let raw_json = serde_json::to_string(&payload)
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    sqlx::query(
+    let result = sqlx::query(
         "INSERT INTO reports (mac_address, score, timestamp, client_version, signature, data) 
          VALUES (?, ?, ?, ?, ?, ?)",
     )
@@ -86,7 +89,14 @@ async fn submit(
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    Ok(StatusCode::CREATED)
+    let id = result.last_insert_rowid();
+    Ok((StatusCode::CREATED, Json(id)))
+}
+
+fn parse_report_row(id: i64, data: String) -> Option<FullReport> {
+    let mut report: FullReport = serde_json::from_str(&data).ok()?;
+    report.id = Some(id);
+    Some(report)
 }
 
 async fn get_leaderboard(
@@ -96,9 +106,9 @@ async fn get_leaderboard(
     let limit = pagination.limit.unwrap_or(10);
     let offset = pagination.offset.unwrap_or(0);
 
-    let rows: Vec<String> = sqlx::query_scalar(
+    let rows: Vec<(i64, String)> = sqlx::query_as(
         r#"
-        SELECT data FROM reports r
+        SELECT id, data FROM reports r
         WHERE score = (SELECT MAX(score) FROM reports WHERE mac_address = r.mac_address)
         GROUP BY mac_address
         ORDER BY score DESC
@@ -113,15 +123,35 @@ async fn get_leaderboard(
 
     let results = rows
         .into_iter()
-        .filter_map(|row| serde_json::from_str(&row).ok())
+        .filter_map(|(id, data)| parse_report_row(id, data))
         .collect();
 
     Ok(Json(results))
 }
 
+async fn get_report_by_id(
+    State(state): State<Arc<AppState>>,
+    Path(id): Path<i64>,
+) -> Result<Json<FullReport>, (StatusCode, String)> {
+    let row: (i64, String) = sqlx::query_as("SELECT id, data FROM reports WHERE id = ?")
+        .bind(id)
+        .fetch_optional(&state.db)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        .ok_or((StatusCode::NOT_FOUND, "Report not found".to_string()))?;
+
+    let report = parse_report_row(row.0, row.1).ok_or((
+        StatusCode::INTERNAL_SERVER_ERROR,
+        "Failed to parse stored data".to_string(),
+    ))?;
+
+    Ok(Json(report))
+}
+
 pub fn routes(state: Arc<AppState>) -> Router {
     Router::new()
         .route("/", post(submit).get(get_leaderboard))
+        .route("/{id}", get(get_report_by_id))
         .with_state(state)
 }
 

@@ -207,7 +207,8 @@ fn send_to_server(url: &str, report: &FullReport) {
                 eprintln!(
                     "{} Error sending to server: {}",
                     "Error:".red(),
-                    resp.status()
+                    resp.status(),
+                    // resp.text().unwrap_or_default()
                 );
             }
         }
