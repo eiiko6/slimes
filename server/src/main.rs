@@ -1,4 +1,4 @@
-use std::{collections::HashMap, net::SocketAddr, sync::Arc, time::Duration};
+use std::{net::SocketAddr, sync::Arc, time::Duration};
 
 use axum::{
     Json, Router,
@@ -8,15 +8,14 @@ use axum::{
 };
 use clap::Parser;
 use serde::{Deserialize, Serialize};
-use sqlx::{SqlitePool, sqlite::SqlitePoolOptions};
+use sqlx::{PgPool, postgres::PgPoolOptions};
 use tower_governor::{GovernorLayer, governor::GovernorConfigBuilder};
 use tower_http::cors::{Any, CorsLayer};
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
 struct Args {
-    /// Path to the SQLite database file
-    #[arg(short, long, default_value = "slimes.db")]
+    #[arg(short, long)]
     database_url: String,
 
     /// Port to listen on
@@ -43,10 +42,10 @@ pub struct BenchmarkReport {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct FullReport {
     #[serde(skip_deserializing)]
-    pub id: Option<i64>,
+    pub id: Option<i32>,
     pub mac_address: String,
     pub timestamp: String,
-    pub slimes: Option<HashMap<String, Vec<String>>>,
+    pub slimes: Option<serde_json::Value>,
     pub benchmark: Option<BenchmarkReport>,
     pub client_version: String,
     pub signature: String,
@@ -54,30 +53,31 @@ pub struct FullReport {
 
 #[derive(Deserialize)]
 pub struct Pagination {
-    pub limit: Option<u32>,
-    pub offset: Option<u32>,
+    pub limit: Option<i64>,
+    pub offset: Option<i64>,
 }
 
 pub struct AppState {
-    db: SqlitePool,
+    db: PgPool,
 }
 
 async fn submit(
     State(state): State<Arc<AppState>>,
     Json(payload): Json<FullReport>,
-) -> Result<(StatusCode, Json<i64>), (StatusCode, String)> {
+) -> Result<(StatusCode, Json<i32>), (StatusCode, String)> {
     let score = payload
         .benchmark
         .as_ref()
         .map(|b| b.multi_thread.score)
         .unwrap_or(0);
 
-    let raw_json = serde_json::to_string(&payload)
+    let raw_json = serde_json::to_value(&payload)
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    let result = sqlx::query(
+    let row: (i32,) = sqlx::query_as(
         "INSERT INTO reports (mac_address, score, timestamp, client_version, signature, data) 
-         VALUES (?, ?, ?, ?, ?, ?)",
+         VALUES ($1, $2, $3, $4, $5, $6)
+         RETURNING id",
     )
     .bind(&payload.mac_address)
     .bind(score as i64)
@@ -85,16 +85,15 @@ async fn submit(
     .bind(&payload.client_version)
     .bind(&payload.signature)
     .bind(raw_json)
-    .execute(&state.db)
+    .fetch_one(&state.db)
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    let id = result.last_insert_rowid();
-    Ok((StatusCode::CREATED, Json(id)))
+    Ok((StatusCode::CREATED, Json(row.0)))
 }
 
-fn parse_report_row(id: i64, data: String) -> Option<FullReport> {
-    let mut report: FullReport = serde_json::from_str(&data).ok()?;
+fn parse_report_row(id: i32, data: serde_json::Value) -> Option<FullReport> {
+    let mut report: FullReport = serde_json::from_value(data).ok()?;
     report.id = Some(id);
     Some(report)
 }
@@ -106,13 +105,15 @@ async fn get_leaderboard(
     let limit = pagination.limit.unwrap_or(10);
     let offset = pagination.offset.unwrap_or(0);
 
-    let rows: Vec<(i64, String)> = sqlx::query_as(
+    let rows: Vec<(i32, serde_json::Value)> = sqlx::query_as(
         r#"
-        SELECT id, data FROM reports r
-        WHERE score = (SELECT MAX(score) FROM reports WHERE mac_address = r.mac_address)
-        GROUP BY mac_address
+        SELECT id, data FROM (
+            SELECT DISTINCT ON (mac_address) id, data, score
+            FROM reports
+            ORDER BY mac_address, score DESC
+        ) sub
         ORDER BY score DESC
-        LIMIT ? OFFSET ?
+        LIMIT $1 OFFSET $2
         "#,
     )
     .bind(limit)
@@ -131,14 +132,15 @@ async fn get_leaderboard(
 
 async fn get_report_by_id(
     State(state): State<Arc<AppState>>,
-    Path(id): Path<i64>,
+    Path(id): Path<i32>,
 ) -> Result<Json<FullReport>, (StatusCode, String)> {
-    let row: (i64, String) = sqlx::query_as("SELECT id, data FROM reports WHERE id = ?")
-        .bind(id)
-        .fetch_optional(&state.db)
-        .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
-        .ok_or((StatusCode::NOT_FOUND, "Report not found".to_string()))?;
+    let row: (i32, serde_json::Value) =
+        sqlx::query_as("SELECT id, data FROM reports WHERE id = $1")
+            .bind(id)
+            .fetch_optional(&state.db)
+            .await
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+            .ok_or((StatusCode::NOT_FOUND, "Report not found".to_string()))?;
 
     let report = parse_report_row(row.0, row.1).ok_or((
         StatusCode::INTERNAL_SERVER_ERROR,
@@ -162,26 +164,20 @@ async fn main() -> anyhow::Result<()> {
     let subscriber = tracing_subscriber::FmtSubscriber::new();
     tracing::subscriber::set_global_default(subscriber).unwrap();
 
-    let path = &args.database_url;
-    if !path.is_empty() && !std::path::Path::new(path).exists() {
-        tracing::info!("Creating database file at {}", path);
-        std::fs::File::create(path)?;
-    }
-
-    let pool = SqlitePoolOptions::new()
+    let pool = PgPoolOptions::new()
         .max_connections(5)
-        .connect(format!("sqlite:{}", &args.database_url).as_str())
+        .connect(&args.database_url)
         .await?;
 
     sqlx::query(
         "CREATE TABLE IF NOT EXISTS reports (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id SERIAL PRIMARY KEY,
             mac_address TEXT NOT NULL,
-            score INTEGER NOT NULL,
+            score BIGINT NOT NULL,
             timestamp TEXT NOT NULL,
             client_version TEXT NOT NULL,
             signature TEXT,
-            data TEXT NOT NULL
+            data JSONB NOT NULL
         );",
     )
     .execute(&pool)
