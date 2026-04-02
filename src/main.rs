@@ -148,6 +148,10 @@ fn main() {
             scaling_color_formatter(format!("{:.2}x", multi_thread_speedup_ratio)).bold()
         );
 
+        let score = (multithread_benchmark.score + singlethread_benchmark.score) / 2;
+
+        println!("\nCPU Score         : {score}",);
+
         report.benchmark = Some(BenchmarkReport {
             prime_limit: cli.prime_limit,
             logical_cores: logical_core_count,

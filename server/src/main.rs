@@ -68,7 +68,7 @@ async fn submit(
     let score = payload
         .benchmark
         .as_ref()
-        .map(|b| b.multi_thread.score)
+        .map(|b| (b.multi_thread.score + b.single_thread.score) / 2)
         .unwrap_or(0);
 
     let raw_json = serde_json::to_value(&payload)
