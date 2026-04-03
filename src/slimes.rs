@@ -252,7 +252,7 @@ impl Slime for GpuSlime {
             }
         }
 
-        #[cfg(target_os = "linux")]
+        #[cfg(all(target_os = "linux", not(target_os = "android")))]
         {
             use std::process::Command;
 
@@ -372,7 +372,7 @@ impl Slime for NetworkSlime {
             }
         }
 
-        #[cfg(target_os = "linux")]
+        #[cfg(all(target_os = "linux", not(target_os = "android")))]
         {
             use std::process::Command;
 
@@ -443,7 +443,7 @@ impl Slime for AudioSlime {
             }
         }
 
-        #[cfg(target_os = "linux")]
+        #[cfg(all(target_os = "linux", not(target_os = "android")))]
         {
             use std::process::Command;
 
